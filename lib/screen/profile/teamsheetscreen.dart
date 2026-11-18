@@ -1,0 +1,410 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cnattendance/data/source/network/model/teamsheet/Branch.dart';
+import 'package:cnattendance/data/source/network/model/teamsheet/Department.dart';
+import 'package:cnattendance/model/team.dart';
+import 'package:cnattendance/provider/teamsheetprovider.dart';
+import 'package:cnattendance/screen/profile/chatscreen.dart';
+import 'package:cnattendance/screen/profile/employeedetailscreen.dart';
+import 'package:cnattendance/widget/buttonborder.dart';
+import 'package:cnattendance/widget/radialDecoration.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:flutter_translate/flutter_translate.dart';
+import 'package:get/get.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class TeamSheetScreen extends StatelessWidget {
+  static const routeName = '/teamsheet';
+
+  const TeamSheetScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => TeamSheetProvider(),
+      child: TeamSheet(),
+    );
+  }
+}
+
+class TeamSheet extends StatefulWidget {
+  const TeamSheet({super.key});
+
+  @override
+  State<TeamSheet> createState() => TeamSheetState();
+}
+
+class TeamSheetState extends State<TeamSheet> {
+  bool initialState = true;
+  bool isLoading = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (initialState) {
+      initialState = false;
+      getTeam();
+    }
+  }
+
+  Future<void> getTeam() async {
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    EasyLoading.show(
+      status: translate('loader.loading'),
+      maskType: EasyLoadingMaskType.black,
+    );
+
+    try {
+      await Provider.of<TeamSheetProvider>(
+        context,
+        listen: false,
+      ).getTeam();
+    } catch (e) {
+      debugPrint('Get Team Error: $e');
+    } finally {
+      EasyLoading.dismiss(animation: true);
+
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<TeamSheetProvider>();
+    final teamList = provider.mainTeamList;
+
+    return PopScope(
+      canPop: !isLoading,
+      child: Container(
+        decoration: RadialDecoration(),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            title: Text(
+              translate('team_sheet_screen.team_sheet'),
+            ),
+            elevation: 0,
+          ),
+          body: SafeArea(
+            child: RefreshIndicator(
+              onRefresh: getTeam,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  teamList.isEmpty
+                      ? const SizedBox.shrink()
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            DropdownButton2<Branch>(
+                              underline: const SizedBox.shrink(),
+                              isExpanded: true,
+                              items: provider.branches
+                                  .map(
+                                    (item) => DropdownMenuItem<Branch>(
+                                      value: item,
+                                      child: Text(
+                                        item.name,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              value: provider.branches
+                                  .where(
+                                    (element) =>
+                                        element.id == provider.selectedBranch,
+                                  )
+                                  .first,
+                              onChanged: (value) {
+                                if (value == null) return;
+
+                                setState(() {
+                                  provider.selectedBranch = value.id;
+
+                                  provider.setDepartment(value.department);
+
+                                  if (value.department.isNotEmpty) {
+                                    provider.selectedDepartment =
+                                        value.department.first.id;
+                                  }
+
+                                  provider.makeTeamList();
+                                });
+                              },
+                              iconStyleData: const IconStyleData(
+                                icon: Icon(
+                                  Icons.arrow_forward_ios_outlined,
+                                ),
+                                iconSize: 14,
+                                iconEnabledColor: Colors.black,
+                                iconDisabledColor: Colors.grey,
+                              ),
+                              buttonStyleData: ButtonStyleData(
+                                height: 50,
+                                width: 160,
+                                padding: const EdgeInsets.only(
+                                  left: 14,
+                                  right: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(10),
+                                    topRight: Radius.circular(0),
+                                    bottomLeft: Radius.circular(0),
+                                    bottomRight: Radius.circular(10),
+                                  ),
+                                  color: Color(0xffFFFFFF),
+                                ),
+                                elevation: 0,
+                              ),
+                              dropdownStyleData: DropdownStyleData(
+                                maxHeight: 200,
+                                padding: null,
+                                decoration: BoxDecoration(
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(0),
+                                    topRight: Radius.circular(10),
+                                    bottomLeft: Radius.circular(10),
+                                    bottomRight: Radius.circular(10),
+                                  ),
+                                  color: Color(0xffFFFFFF),
+                                ),
+                                elevation: 8,
+                              ),
+                              menuItemStyleData: const MenuItemStyleData(
+                                height: 40,
+                                padding: EdgeInsets.only(
+                                  left: 14,
+                                  right: 14,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            DropdownButton2<Department>(
+                              underline: const SizedBox.shrink(),
+                              isExpanded: true,
+                              items: provider.department
+                                  .map(
+                                    (item) => DropdownMenuItem<Department>(
+                                      value: item,
+                                      child: Text(
+                                        item.name,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              value: provider.department
+                                  .where(
+                                    (element) =>
+                                        element.id ==
+                                        provider.selectedDepartment,
+                                  )
+                                  .first,
+                              onChanged: (value) {
+                                if (value == null) return;
+
+                                setState(() {
+                                  provider.selectedDepartment = value.id;
+                                  provider.makeTeamList();
+                                });
+                              },
+                              iconStyleData: const IconStyleData(
+                                icon: Icon(
+                                  Icons.arrow_forward_ios_outlined,
+                                ),
+                                iconSize: 14,
+                                iconEnabledColor: Colors.black,
+                                iconDisabledColor: Colors.grey,
+                              ),
+                              buttonStyleData: ButtonStyleData(
+                                height: 50,
+                                width: 160,
+                                padding: const EdgeInsets.only(
+                                  left: 14,
+                                  right: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(10),
+                                    topRight: Radius.circular(0),
+                                    bottomLeft: Radius.circular(0),
+                                    bottomRight: Radius.circular(10),
+                                  ),
+                                  color: Color(0xffFFFFFF),
+                                ),
+                                elevation: 0,
+                              ),
+                              dropdownStyleData: DropdownStyleData(
+                                maxHeight: 200,
+                                padding: null,
+                                decoration: BoxDecoration(
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(0),
+                                    topRight: Radius.circular(10),
+                                    bottomLeft: Radius.circular(10),
+                                    bottomRight: Radius.circular(10),
+                                  ),
+                                  color: Color(0xffFFFFFF),
+                                ),
+                                elevation: 8,
+                              ),
+                              menuItemStyleData: const MenuItemStyleData(
+                                height: 40,
+                                padding: EdgeInsets.only(
+                                  left: 14,
+                                  right: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                  const SizedBox(height: 15),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 5,
+                        horizontal: 15,
+                      ),
+                      itemCount: provider.teamList.length,
+                      itemBuilder: (ctx, i) {
+                        return Padding(
+                          padding: const EdgeInsets.all(5),
+                          child: teamCard(provider.teamList[i]),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget teamCard(Team teamList) {
+    return Card(
+      shape: ButtonBorder(),
+      elevation: 0,
+      color: Colors.white10,
+      child: InkWell(
+        onTap: () {
+          Get.to(
+            EmployeeDetailScreen(),
+            arguments: {
+              "employeeId": teamList.id.toString(),
+            },
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: teamList.active == "1" ? Colors.green : Colors.grey,
+                    width: 2,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: CachedNetworkImage(
+                    imageUrl: teamList.avatar,
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Text(
+                        teamList.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        teamList.post,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () async {
+                  final url = Uri.parse("tel:${teamList.phone}");
+
+                  if (await canLaunchUrl(url)) {
+                    await launchUrl(url);
+                  } else {
+                    debugPrint('Could not launch $url');
+                  }
+                },
+                icon: const Icon(
+                  Icons.phone,
+                  color: Colors.white,
+                ),
+              ),
+              IconButton(
+                onPressed: () {
+                  Get.to(
+                    ChatScreen(),
+                    arguments: {
+                      "name": teamList.name,
+                      "avatar": teamList.avatar,
+                      "username": teamList.username,
+                    },
+                  );
+                },
+                icon: const Icon(
+                  Icons.message,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

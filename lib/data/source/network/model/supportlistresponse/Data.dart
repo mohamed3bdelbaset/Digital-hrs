@@ -1,0 +1,20 @@
+import 'package:cnattendance/data/source/network/model/supportlistresponse/DataX.dart';
+
+class Data {
+  List<DataX> data;
+
+  Data({required this.data});
+
+  factory Data.fromJson(Map<String, dynamic> json) {
+    return Data(
+      data:
+          (json['data'] as List? ?? []).map((i) => DataX.fromJson(i)).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': data.map((v) => v.toJson()).toList(),
+    };
+  }
+}
